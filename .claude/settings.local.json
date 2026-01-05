@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:feeds.simplecast.com)",
+      "Bash(curl:*)"
+    ]
+  }
+}

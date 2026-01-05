@@ -1,0 +1,47 @@
+---
+title: "This Website"
+createdAt: "2024-01-01"
+techStack: ["Next.js", "Tailwind CSS", "MDX", "Vercel"]
+githubUrl: "https://github.com/ankit/personal-site"
+liveUrl: "https://ankit.dev"
+excerpt: "A hyper-minimalist personal blog built with Next.js 15, featuring MDX content, dark mode, and blazing fast performance."
+---
+
+## Why I built this
+
+I wanted a simple, fast, personal website where I could share my thoughts and projects. No complex CMS, no heavy frameworks—just markdown files and clean code.
+
+## The stack
+
+### Next.js 15 with App Router
+
+The App Router gives us React Server Components by default, which means almost zero client-side JavaScript. Pages load instantly.
+
+### Tailwind CSS v4
+
+Utility-first CSS that makes styling fast and consistent. Dark mode is built in with the class strategy.
+
+### MDX for content
+
+Write in markdown, but with the power of React components when needed. Perfect for technical writing.
+
+### Deployed on Vercel
+
+Zero-config deployment. Push to main, and it's live.
+
+## Performance goals
+
+- **LCP < 1s**: Achieved through SSG and optimized images
+- **CLS = 0**: All images have explicit dimensions
+- **INP < 50ms**: Minimal client JavaScript
+
+## Key features
+
+1. **Cypherpunk animated text** - A fun decrypt effect on the homepage
+2. **Server-side category filtering** - No client JS needed for filtering blog posts
+3. **Dark mode without flash** - Inline script sets theme before paint
+4. **Mobile-first design** - Responsive with 44px touch targets
+
+## Lessons learned
+
+Keep it simple. It's tempting to add features, but every feature has a maintenance cost. Start minimal and add only what you need.
