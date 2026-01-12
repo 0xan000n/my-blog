@@ -6,7 +6,8 @@
       "WebFetch(domain:feeds.simplecast.com)",
       "Bash(curl:*)",
       "WebFetch(domain:www.shadcn.io)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(sips:*)"
     ]
   }
 }
