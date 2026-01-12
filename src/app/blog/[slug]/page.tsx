@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getBlogPost, getBlogSlugs } from '@/lib/mdx'
+import { AnimatedText } from '@/components/AnimatedText'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -39,7 +40,7 @@ export default async function BlogPostPage({ params }: Props) {
           &larr; Back to blog
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">
-          {post.frontmatter.title}
+          <AnimatedText text={post.frontmatter.title} />
         </h1>
         <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
           <time dateTime={post.frontmatter.date}>

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getInvestment, getInvestmentSlugs } from '@/lib/mdx'
+import { AnimatedText } from '@/components/AnimatedText'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -39,7 +40,7 @@ export default async function InvestmentPage({ params }: Props) {
           &larr; Back to investments
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">
-          {investment.frontmatter.company}
+          <AnimatedText text={investment.frontmatter.company} />
         </h1>
         <p className="text-lg text-zinc-400">
           {investment.frontmatter.description}

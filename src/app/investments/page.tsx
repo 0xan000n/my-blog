@@ -42,7 +42,7 @@ export default async function InvestmentsPage() {
 
       {investments.length > 0 && (
         <div className="space-y-6">
-          <h2 className="text-lg font-medium">Deal Memos</h2>
+          <h2 className="text-lg font-medium">Memos</h2>
           <div className="grid gap-4">
             {investments.map((investment) => (
               <article key={investment.slug} className="group">

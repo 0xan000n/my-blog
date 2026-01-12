@@ -4,7 +4,9 @@
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
       "WebFetch(domain:feeds.simplecast.com)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:www.shadcn.io)",
+      "WebSearch"
     ]
   }
 }

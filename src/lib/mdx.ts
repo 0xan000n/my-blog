@@ -1,7 +1,16 @@
 import { compileMDX } from 'next-mdx-remote/rsc'
 import { readFile, readdir } from 'fs/promises'
 import path from 'path'
+import rehypeSlug from 'rehype-slug'
 import { BlogFrontmatter, ProjectFrontmatter, InvestmentFrontmatter, BlogPost, Project, Investment } from './types'
+import { mdxComponents } from '@/components/mdx-components'
+
+const mdxOptions = {
+  parseFrontmatter: true,
+  mdxOptions: {
+    rehypePlugins: [rehypeSlug],
+  },
+}
 
 const BLOG_DIR = path.join(process.cwd(), 'content/blog')
 const PROJECTS_DIR = path.join(process.cwd(), 'content/projects')
@@ -14,7 +23,8 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
 
     const { content, frontmatter } = await compileMDX<BlogFrontmatter>({
       source,
-      options: { parseFrontmatter: true }
+      components: mdxComponents,
+      options: mdxOptions,
     })
 
     const wordCount = source.split(/\s+/).length
@@ -49,7 +59,8 @@ export async function getProject(slug: string): Promise<Project | null> {
 
     const { content, frontmatter } = await compileMDX<ProjectFrontmatter>({
       source,
-      options: { parseFrontmatter: true }
+      components: mdxComponents,
+      options: mdxOptions,
     })
 
     return { slug, frontmatter, content }
@@ -99,7 +110,8 @@ export async function getInvestment(slug: string): Promise<Investment | null> {
 
     const { content, frontmatter } = await compileMDX<InvestmentFrontmatter>({
       source,
-      options: { parseFrontmatter: true }
+      components: mdxComponents,
+      options: mdxOptions,
     })
 
     return { slug, frontmatter, content }
