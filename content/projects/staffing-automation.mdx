@@ -1,36 +1,41 @@
 ---
-title: "Staffing Company Automation"
-createdAt: "2025-01-03"
-techStack: ["Airtable", "Metaview", "Juicebox", "Make/Zapier", "AI"]
-excerpt: "End-to-end automation system for a $XM+ ARR staffing and consulting company—from complete disorganization to a streamlined pipeline."
+title: Staffing Company Automation
+createdAt: 2025-01-03
+techStack:
+  - Airtable
+  - Metaview
+  - Juicebox
+  - Claude Opus 4.5
+excerpt: End-to-end automation system for a $XM+ ARR staffing and consulting company—from complete disorganization to a streamlined pipeline.
 ---
 
 ## The problem
 
-A staffing and consulting company doing $XM+ ARR was running on chaos. Candidate info scattered across spreadsheets, manual job description parsing, email outreach done one-by-one, no system to track pipeline stages. The team was drowning in busywork instead of closing deals.
+A staffing and consulting company doing $XM+ ARR was manually handling their end-to-end recruitment pipeline. Candidate info was super chaotic and scattered across spreadsheets, manual job description parsing, email/LinkedIn outreach with no cohesive system to track pipeline stages. As a result, the team was drowning in busywork instead of closing deals.
 
 ## What I built
 
 A fully automated system that handles the entire staffing workflow:
 
-### Automatic candidate sourcing
-Integrated Metaview and Juicebox for automatic candidate sourcing. When a new role comes in, the system pulls qualified candidates without manual searching.
+### Scrape job info w/ AI
+Built a straightforward AI scraper on [Airtable](https://airtable.com/) that extracts requirements, qualifications, and keywords from job descriptions automatically. No more copying and pasting into spreadsheets.
 
-### AI-powered job description scraping
-Built an AI scraper that extracts requirements, qualifications, and keywords from job descriptions automatically. No more copying and pasting into spreadsheets.
+### Source candidates automatically
+Integrated [Metaview](https://www.metaview.ai/) and [Juicebox](https://juicebox.ai/?via=765bf9&utm_source=google&utm_medium=pmax&utm_campaign=pmax_remarketing&utm_content=&utm_term={searchterm}&hstk_creative=&hstk_campaign=23347676118&hstk_network=googleAds&gad_source=1&gad_campaignid=23352796523&gbraid=0AAAAAo-1_snFEZsD2A1HpbOv0mdsN4Hpe) for automatic candidate sourcing. When a new role comes in, AI generates the key words to search for and automatically provides an optimal search query to run when looking for candidates.
 
-### Personalized content creation
-AI generates tailored outreach messages based on each candidate's profile—their experience, skills, and career trajectory. No more generic templates.
+
+### Drafts emails for outreach
+AI generates *personalized* tailored outreach messages based on each candidate's profile, their experience, skills, and career trajectory.
 
 ### Automated email outreach
-Candidates get personalized outreach emails triggered automatically based on role fit. Sequences handle follow-ups without manual intervention.
+Candidates get personalized outreach emails triggered automatically based on role fit. Next todo: sequences to handle follow-ups without manual intervention.
 
-### LinkedIn outreach automation
-Parallel LinkedIn sequences run alongside email. Connection requests, follow-up messages, and engagement all automated while staying within platform limits.
+### TODO: Improve with LinkedIn outreach
+Parallel LinkedIn sequences should run alongside email. In an ideal scenario, connection requests and follow-up messages is automated while staying within platform limits.
 
 ### Airtable as the hub
-Everything flows through Airtable as the central database—candidates, roles, pipeline stages, communications. One source of truth instead of scattered docs.
+Everything flows through Airtable as the central database - candidates, roles, pipeline stages, communications. One source of truth instead of scattered docs.
 
 ## The result
 
-Went from complete disorganization to a proper system. The team now spends time on high-value activities (closing, relationship building) instead of manual data entry and outreach.
+Went from complete disorganization to a proper, scalable system. The team can now spend time on high-value activities like closing new clients, relationship building with hiring managers.
