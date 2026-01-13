@@ -67,7 +67,7 @@ export const sovereignSchoolbus = {
 
 export const tribeOfOne = {
   title: 'A Tribe of One',
-  description: 'Co-hosted with Rob Giometti, exploring tribalism and community through conversations with founders, philosophers, and builders.',
+  description: "A podcast exploring the tribes we belong to and our shared communities through conversations with founders, philosophers, and builders.",
   image: '/tribe_of_one.jpg',
   podbayUrl: 'https://podbay.fm/p/a-tribe-of-one',
   episodes: [
