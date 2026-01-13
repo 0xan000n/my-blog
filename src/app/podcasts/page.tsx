@@ -22,7 +22,7 @@ export default function PodcastsPage() {
           <AnimatedText text="Podcasts" />
         </h1>
         <p className="text-zinc-400">
-          Conversations about belonging, tribalism, and the human experience.
+          Conversations with builders and thinkers at the intersection of technology, community, and our shared future.
         </p>
       </div>
 
