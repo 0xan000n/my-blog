@@ -1,0 +1,271 @@
+---
+title: "PodClip: Building a Viral Clip Extractor with AI"
+createdAt: "2026-02-13"
+techStack: ["FastAPI", "Next.js", "Claude AI", "FFmpeg", "SQLite", "shadcn/ui", "yt-dlp", "Supabase"]
+githubUrl: "https://github.com/yourusername/podclip"
+excerpt: "How I built a full-stack AI-powered podcast clip extractor in 3 days with Claude Code—from script to production web app with real-time progress, LLM orchestration, and professional video processing."
+---
+
+## The Problem
+
+Podcast creators want to go viral on TikTok, Reels, and Shorts. But manually finding clip-worthy moments in 2-hour episodes is tedious.
+
+**The vision:** Paste a YouTube URL, and 10 minutes later get 5 AI-selected viral clips with hooks, captions, and timestamps ready to post.
+
+**The result:** Built in 3 days with Claude Opus 4.6 (via Claude Code CLI). Production-ready full-stack app with LLM orchestration, real-time progress, and professional video processing.
+
+---
+
+## From Script to System
+
+I started with a working Python script (`pod-clipper`) that processed podcasts locally. It worked, but had no web interface, no async operations, global config everywhere, no progress visibility, and no database.
+
+**My prompt to Claude:**
+> "Help me turn this podcast clipper script into a production web app. I want:
+> - FastAPI backend with async/await
+> - Next.js frontend with real-time progress
+> - Database to store jobs and clips
+> - Clean architecture (no global state)"
+
+Claude analyzed the codebase and proposed:
+
+```
+Backend (FastAPI + SQLite + Async)
+  ↓
+Pipeline Modules (Refactored from pod-clipper)
+  ↓
+Background Jobs (asyncio.to_thread)
+  ↓
+Real-time Progress (SSE)
+  ↓
+Frontend (Next.js + shadcn/ui)
+```
+
+### Key Decisions
+
+**SSE over WebSocket** for real-time progress:
+- Simpler protocol (no connection upgrade)
+- Browser-native EventSource API
+- Falls back to polling gracefully
+
+**Async Bridge Pattern** to solve CPU-bound blocking:
+```python
+class ProgressReporter:
+    def report(self, status, pct, message):
+        # Called from blocking thread
+        self._events.append(event)
+        self._loop.call_soon_threadsafe(self._async_event.set)
+
+    async def listen(self):
+        # Async generator for SSE
+        while True:
+            await self._async_event.wait()
+            yield event
+```
+
+This lets FFmpeg and LLM operations run in threads while the web server streams progress in real-time.
+
+**Single commit, 36 files, 2,641 lines:**
+
+```
+e33514e Initial commit: PodClip — YouTube viral clip extractor
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+---
+
+## Two-Phase LLM Strategy
+
+Sending entire 2-hour transcripts to Claude was expensive and overwhelming. Claude designed a two-phase pipeline:
+
+**Phase 1: Triage (Sonnet - fast scan)**
+- Scans full transcript → Top 20 candidates
+- Priority score, category, timestamps
+- ~$0.10 per video
+
+**Phase 2: Deep Analysis (Opus - focused)**
+- Analyzes small windows around promising moments
+- Generates virality scores, hooks, quotes, scroll-stoppers, captions
+- ~$0.50 per video
+
+Total LLM cost: **~$0.60 per video**
+
+### The 219-Line Prompt
+
+The `DETECTION_PROMPT` teaches semantic boundaries:
+
+```
+CRITICAL: Your start_time and end_time should land on NATURAL SENTENCE BOUNDARIES
+  - Start just before the speaker begins the key thought (not mid-sentence)
+  - End just after they complete the thought (not mid-word or mid-sentence)
+  - A 10-second buffer will be added automatically before and after your timestamps
+  - Your timestamps should capture the ESSENTIAL content; the buffer prevents cutoffs
+```
+
+Combined with post-processing buffer, clips never cut off mid-sentence.
+
+---
+
+## The FFmpeg Challenge
+
+Naive approach had seeking issues, codec errors, and random failures:
+```bash
+ffmpeg -ss START -i video.mp4 -t DURATION output.mp4  # ❌ Unreliable
+```
+
+**Claude's two-step solution:**
+
+**Step 1:** Stream-copy segment (instant, no decoding)
+```bash
+ffmpeg -ss START -i video.mp4 -t DURATION -c copy segment.mp4
+```
+
+**Step 2:** Re-encode from segment (no seeking needed)
+```bash
+ffmpeg -i segment.mp4 [filters] -c:v libx264 output.mp4
+```
+
+Bypasses all codec issues. For TikTok/Reels, scales video to 9:16 with blurred background.
+
+---
+
+## Real-Time Progress
+
+Before: Submit URL → black box → clips appear 10 minutes later
+
+After: Live updates via SSE:
+```
+[████░░░░░░] 40% Analyzing transcript...
+[████████░░] 80% Creating clips: 3/5
+[██████████] 100% Complete!
+```
+
+Frontend polls `/api/jobs/{jobId}/clips` every 3 seconds during clip creation. Clips appear as they're generated, not after all are done.
+
+---
+
+## The Buffer Fix
+
+After testing with real podcasts, clips cut off mid-sentence:
+- "...and that's why I think—" [CUT]
+
+**My prompt:**
+> "New rule: clips should not cut off mid-sentence. Add 10s buffer before and after"
+
+**Claude's hybrid solution:**
+1. Updated prompts to teach LLM about natural boundaries
+2. Applied post-processing buffer
+3. Clamped to video duration
+
+```python
+buffered_start = max(0.0, start_time - buffer_before)  # 10s before
+buffered_end = min(end_time + buffer_after, video_duration)  # 10s after
+```
+
+Result: Perfect clip boundaries. Implementation took 3 hours, 5 files modified.
+
+---
+
+## Tech Stack
+
+### Backend: FastAPI + SQLAlchemy Async
+
+- FastAPI for async/await and SSE streaming
+- SQLite via `aiosqlite` (single file, no server)
+- Pydantic validation built-in
+
+### Frontend: Next.js 16 + shadcn/ui
+
+- Server Components for fast initial render
+- Dynamic routing (`/jobs/[id]`)
+- API proxy (`/api/*` → backend:8000)
+- shadcn/ui for accessible components
+
+### Pipeline: 6 Steps
+
+```
+1. Fetch metadata (yt-dlp)
+2. Extract transcript (YouTube captions)
+3. Detect highlights (Claude 2-phase)
+4. Download video (yt-dlp)
+5. Create clips (FFmpeg → Supabase)
+6. Notify (Slack, Airtable)
+```
+
+---
+
+## What Got Built
+
+**Core:**
+- YouTube download, transcript extraction, AI highlight detection
+- Video clip creation (vertical or original)
+- Cloud storage (Supabase S3)
+
+**Interface:**
+- URL submission, live progress, clip gallery
+- Job detail pages, library browser
+
+**Metadata:**
+- Virality scores, hooks, quotes, energy levels
+- Scroll-stoppers, interstitials, dual captions
+
+**Production:**
+- Docker, Railway deployment
+- Error handling, migrations
+
+**Performance:** 5-10 minutes for 2-hour podcast
+- Metadata: ~2s
+- Transcript: ~5s
+- Highlights: ~2-3m (LLM)
+- Download: ~1-2m
+- Clips: ~2-3m (parallel)
+
+---
+
+## The Collaboration
+
+**What I brought:**
+- Domain knowledge (what makes clips viral)
+- User requirements and testing
+- Design constraints (shadcn/ui, no global state)
+
+**What Claude brought:**
+- Architecture patterns (SSE, async bridge, two-phase LLM)
+- Code implementation with error handling
+- Edge case discovery (bounds checking, codec issues)
+
+**Key lesson:** Start with architecture, not code. Provide clear constraints ("Use shadcn/ui" > "make it look good"). Test with real data—Claude won't notice mid-sentence cutoffs until you report them.
+
+**Memory system:** Claude Code maintained project patterns in `MEMORY.md`. When I started the buffer enhancement session 3 days later, it knew the project structure, referenced files by path, and followed existing patterns. No "what is this project?" conversation needed.
+
+---
+
+## Metrics
+
+- **Time:** 12 hours (vs estimated 3-5 days solo)
+- **Speedup:** 6-10x
+- **Code:** 2,600 lines of production code
+- **Stack:** 8 technologies seamlessly integrated
+- **Cost:** $0.60 per video processed
+
+**The shift:** Building with Claude Code changed my question from "Can I build this?" to "Should I build this?"
+
+The limiting factor is no longer technical implementation—it's product vision and user understanding.
+
+---
+
+## Appendix: The Co-Authored Commit
+
+```
+commit e33514e22dee45a45a068cf62b5a20e579f318f1
+Author:     0xan000n <0xan000n@protonmail.com>
+Date:       Tue Feb 10 21:22:12 2026 -0800
+
+    Initial commit: PodClip — YouTube viral clip extractor
+
+    Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+ 36 files changed, 2641 insertions(+)
+```
+
+This commit represents the future of software development: humans and AI working together, each playing to their strengths, building products that neither could create alone.
