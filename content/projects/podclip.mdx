@@ -2,8 +2,7 @@
 title: "PodClip: Building a Viral Clip Extractor with AI"
 createdAt: "2026-02-13"
 techStack: ["FastAPI", "Next.js", "Claude AI", "FFmpeg", "SQLite", "shadcn/ui", "yt-dlp", "Supabase"]
-githubUrl: "https://github.com/yourusername/podclip"
-excerpt: "How I built a full-stack AI-powered podcast clip extractor in 3 days with Claude Code—from script to production web app with real-time progress, LLM orchestration, and professional video processing."
+excerpt: "A full-stack AI-powered podcast clip extractor built in 3 days with Claude Code. Paste a YouTube URL, get viral-ready clips with hooks, captions, and timestamps."
 ---
 
 ## The Problem
@@ -12,7 +11,7 @@ Podcast creators want to go viral on TikTok, Reels, and Shorts. But manually fin
 
 **The vision:** Paste a YouTube URL, and 10 minutes later get 5 AI-selected viral clips with hooks, captions, and timestamps ready to post.
 
-**The result:** Built in 3 days with Claude Opus 4.6 (via Claude Code CLI). Production-ready full-stack app with LLM orchestration, real-time progress, and professional video processing.
+**The result:** Built across 3 days (~12 hours of active work) with Claude Opus 4.6 via Claude Code. Fully functional full-stack app with LLM orchestration, real-time progress, and professional video processing.
 
 ---
 
@@ -76,7 +75,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## Two-Phase LLM Strategy
 
-Sending entire 2-hour transcripts to Claude was expensive and overwhelming. Claude designed a two-phase pipeline:
+Sending entire 2-hour transcripts to Claude was expensive and overwhelming. I designed a two-phase pipeline to solve this:
 
 **Phase 1: Triage (Sonnet - fast scan)**
 - Scans full transcript → Top 20 candidates
@@ -174,7 +173,7 @@ Result: Perfect clip boundaries. Implementation took 3 hours, 5 files modified.
 - SQLite via `aiosqlite` (single file, no server)
 - Pydantic validation built-in
 
-### Frontend: Next.js 16 + shadcn/ui
+### Frontend: Next.js 15 + shadcn/ui
 
 - Server Components for fast initial render
 - Dynamic routing (`/jobs/[id]`)
@@ -222,28 +221,22 @@ Result: Perfect clip boundaries. Implementation took 3 hours, 5 files modified.
 
 ---
 
-## The Collaboration
+## What I Learned About AI-Assisted Development
 
-**What I brought:**
-- Domain knowledge (what makes clips viral)
-- User requirements and testing
-- Design constraints (shadcn/ui, no global state)
+**The split that worked:**
+- I owned domain knowledge (what makes clips viral), requirements, and design constraints
+- Claude handled architecture patterns (SSE, async bridge, two-phase LLM), implementation, and edge case discovery (bounds checking, codec issues)
 
-**What Claude brought:**
-- Architecture patterns (SSE, async bridge, two-phase LLM)
-- Code implementation with error handling
-- Edge case discovery (bounds checking, codec issues)
+**Key lesson:** Start with architecture, not code. Give clear constraints ("Use shadcn/ui" > "make it look good"). Test with real data — the AI won't catch mid-sentence cutoffs until you report them.
 
-**Key lesson:** Start with architecture, not code. Provide clear constraints ("Use shadcn/ui" > "make it look good"). Test with real data—Claude won't notice mid-sentence cutoffs until you report them.
-
-**Memory system:** Claude Code maintained project patterns in `MEMORY.md`. When I started the buffer enhancement session 3 days later, it knew the project structure, referenced files by path, and followed existing patterns. No "what is this project?" conversation needed.
+**Memory continuity:** Claude Code maintained project patterns in `MEMORY.md`. When I started the buffer enhancement session 3 days later, it knew the project structure, referenced files by path, and followed existing patterns. No ramp-up needed.
 
 ---
 
 ## Metrics
 
-- **Time:** 12 hours (vs estimated 3-5 days solo)
-- **Speedup:** 6-10x
+- **Time:** ~12 hours of active work across 3 days (vs estimated 3-5 days solo)
+- **Speedup:** ~6-10x
 - **Code:** 2,600 lines of production code
 - **Stack:** 8 technologies seamlessly integrated
 - **Cost:** $0.60 per video processed
@@ -268,4 +261,4 @@ Date:       Tue Feb 10 21:22:12 2026 -0800
  36 files changed, 2641 insertions(+)
 ```
 
-This commit represents the future of software development: humans and AI working together, each playing to their strengths, building products that neither could create alone.
+One commit, two authors. A snapshot of what human-AI collaboration looks like in practice.

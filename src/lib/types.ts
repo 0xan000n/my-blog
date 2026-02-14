@@ -1,7 +1,7 @@
 export interface BlogFrontmatter {
   title: string
   date: string
-  category: 'tech' | 'building' | 'founder-reflections'
+  category: 'technology' | 'reflections' | 'musings'
   excerpt: string
   substackUrl?: string
   linkedinUrl?: string
