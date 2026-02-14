@@ -2,577 +2,159 @@
 title: "X Thread Aggregator"
 createdAt: "2026-02-13"
 techStack: ["TypeScript", "Playwright", "OpenAI GPT-5.2", "Xai Grok", "Airtable API", "Express", "Railway"]
-excerpt: "Building an AI-powered X thread scraper that evolved from MVP to multi-stage validation pipeline in 3 days. A build-in-public journey combining browser automation, GraphQL interception, and intelligent data normalization."
+excerpt: "Scraping X threads with Playwright, validating with Grok and GPT, and pushing clean data to Airtable — built in 3 days."
 ---
 
 ## Why I Built This
 
-I needed to solve a real problem: extracting and normalizing podcast guest nominations from X (Twitter) threads for [dLogos](https://dlogos.xyz).
+Extracting podcast guest nominations from X threads for [dLogos](https://dlogos.xyz) was a manual grind. The process: open a thread with 200+ replies, scroll through every comment hunting for @ mentions, copy nominations into a spreadsheet, deduplicate, fix typos, then upload to Airtable for the team. Each thread took 4-6 hours. We had dozens.
 
-The manual process was brutal:
-- Open an X thread with 200+ replies
-- Scroll through every comment looking for @ mentions
-- Copy-paste nominations into a spreadsheet
-- Spend hours deduplicating and fixing typos
-- Upload to Airtable for team review
+The goal was a system that scrapes, validates with AI, and pushes clean data directly into Airtable. The result: 4-6 hours became under 15 minutes.
 
-**Total time: 4-6 hours per thread.** We had dozens of threads to process.
+## Day 1: Ship the MVP
 
-Existing tools couldn't help because they either:
-- Don't handle nested thread structures
-- Lose critical context (who nominated whom, when, exact wording)
-- Require manual export steps that defeat the purpose of automation
+On January 28, 2026, the entire foundation shipped in a single commit. 23 files, 4,193 lines of code:
 
-So I built X Thread Aggregator: a full-stack system that scrapes, parses, validates with AI, and pushes clean data directly into our Airtable workflow.
+- Browser automation with Playwright and stealth plugins
+- GraphQL API interception instead of HTML scraping
+- Express web server with a Twitter-styled dark UI
+- Docker setup, deployed to Railway by end of day
 
-**The result: 4-6 hours → &lt;15 minutes.**
+The key technical decision was intercepting X's GraphQL API rather than parsing HTML. X's web app makes GraphQL requests internally. Instead of writing fragile CSS selectors that break whenever X redesigns a button, the scraper listens for those same API responses and extracts structured data directly — tweet IDs, timestamps, handles, mentions, nested replies. GraphQL schemas change far less often than HTML, and you get the exact data the frontend sees.
 
-This is the story of how it evolved from a simple scraper to a sophisticated multi-stage AI validation pipeline.
-
-## The Journey
-
-### Day 1: Ship the MVP
-
-On January 28, 2026, I shipped the entire foundation in one commit: 23 files, 4,193 lines of code.
-
-**What I built:**
-- Browser automation with Playwright (stealth mode for X.com)
-- GraphQL API interception (more on this below)
-- Tweet parser extracting mentions, text, timestamps
-- CSV writer with basic deduplication
-- Express web server with job management
-- Clean web UI styled like X/Twitter
-- Full Docker setup for Railway deployment
-
-**Key technical decisions:**
-
-**Playwright over Puppeteer**
-More reliable for X.com's sophisticated bot detection.
-
-**GraphQL Interception Instead of HTML Scraping**
-This was the breakthrough insight. X's web app uses GraphQL internally. Instead of parsing fragile HTML selectors, I intercept the same API responses X's frontend uses:
+The interception handles both direct tweet content and nested conversation threads, which X structures differently in its response:
 
 ```typescript
-page.on('response', async response => {
-  if (response.url().includes('graphql')) {
-    const json = await response.json()
-    // Extract from data.threaded_conversation_with_injections_v2
-    const tweets = parseGraphQLResponse(json)
+page.on('response', async (response) => {
+  if (!response.url().includes('/graphql/')) return;
+  const data = await response.json();
+  const instructions = data?.data
+    ?.threaded_conversation_with_injections_v2?.instructions;
+  if (!instructions) return;
+
+  for (const instruction of instructions) {
+    for (const entry of instruction.entries || []) {
+      // Direct tweet content
+      const tweet = entry.content?.itemContent?.tweet_results?.result;
+      if (tweet) allTweets.set(tweet.rest_id, tweet);
+
+      // Nested conversation thread items
+      for (const item of entry.content?.items || []) {
+        const nested = item.item?.itemContent?.tweet_results?.result;
+        if (nested) allTweets.set(nested.rest_id, nested);
+      }
+    }
   }
-})
+});
 ```
 
-**Why this works:**
-- GraphQL schemas change less frequently than HTML
-- Access to full structured data (IDs, timestamps, nested replies)
-- Same exact data X's frontend sees
+The endpoint pattern is deliberately generic — `/graphql/` rather than a hardcoded endpoint name — because X rotates these frequently. The scraper also uses cursor-based pagination for threads with more replies than a single scroll can capture, supporting up to 500 pages with adaptive rate limiting that doubles the delay every 10 requests.
 
-**TypeScript for Type Safety**
-Complex nested data structures from GraphQL needed type safety.
+By end of Day 1, a working scraper was deployed to Railway.
 
-**Web UI for Non-Technical Users**
-The team needed something accessible—not a CLI tool.
+## Day 1, Evening
 
-By end of Day 1, I had a working scraper deployed to Railway.
+Six hours later, the first bug fixes shipped. Testing against real X threads revealed problems that never surfaced in development: @ symbols inconsistently present in handles, nominator and nominee roles confused in the parser, aggressive normalization stripping valid data. The fix was small — 2 files, 32 lines — but the lesson was immediate.
 
-### Day 1, Evening: Reality Check
+## Day 2: Schema Clarity
 
-Six hours after shipping, I deployed my first bug fixes.
+On January 30th, stakeholders pushed back: "What does `x_url` mean? Is this the X platform or the tweet URL?"
 
-Testing with real X threads revealed:
-- @ symbols inconsistently present in handles
-- Nominator vs nominee confusion in the parser
-- Aggressive normalization removing valid data
+Schema naming matters. The rename was straightforward:
 
-**The fix:** 2 files, 32 lines changed. Improved @ symbol handling and better mention extraction.
+- `x_url` → `reply_url`
+- `nominator_handle` → `commenter_handle`
+- `tweet_text` → `full_reply_text`
 
-**Lesson learned:** Ship fast, test with real data immediately. Don't over-engineer in isolation.
+Non-technical users need self-documenting field names. A few days of real usage revealed pain points that never came up in development.
 
-### Day 2: User Feedback
+The scraper worked. The data was clean enough. But there was a bigger problem: the team was still copy-pasting CSVs into Airtable by hand.
 
-On January 30th, stakeholders gave feedback: "What does `x_url` mean? Is this the X platform or the tweet URL?"
+## Day 3: The Pivot
 
-Schema naming matters more than I thought. I renamed:
-- `x_url` → `reply_url` (semantic clarity)
-- `nominator_handle` → `commenter_handle` (accurate role)
-- `tweet_text` → `full_reply_text` (distinguishes from original post)
+January 31st changed everything. Our team's real workflow lives in Airtable. Manual file transfers between tools defeated the purpose of automation, and AI could validate data quality in real time.
 
-Non-technical users need self-documenting field names. A few days of real usage revealed pain points I'd never have predicted.
+Two major integrations shipped in a single commit — 430 lines.
 
-### Day 3: The Integration Inflection Point
+The system now reads directly from Airtable: parse a record URL, fetch the Thread URL field, scrape the thread, upload the CSV as an attachment, update the record's status, and advance the workflow stage. Zero manual steps between a scraper run and the team seeing results.
 
-January 31st changed everything.
+For validation, Grok was the natural choice. Unlike GPT, Grok has real-time access to X through its `web_search` and `x_search` tools — it can verify handles and check context on the platform itself. The validation applies nine normalization rules: merging duplicates, fixing typos, removing organizations, standardizing handle formatting, filtering the original poster's own comments.
 
-I realized: **our team's real workflow lives in Airtable.** Manual copy-paste between tools defeats the automation purpose. And AI could validate data quality in real-time.
+But one AI pass was not enough. Grok and GPT have different strengths. Grok excels at web-aware tasks — real-time search, organization verification, handle lookup. GPT-5.2 is better at structured reasoning — producing clean CSVs, handling edge cases, complex merging logic.
 
-I added two game-changing integrations in one commit (430 lines):
+The pipeline runs in four stages. First, Grok normalizes the raw CSV using its search tools to verify data against live X. Its output is a JSON changelog of what it changed and why. Second, GPT takes the original CSV plus Grok's changelog and produces a clean, structured CSV. Third, for nominees mentioned by name only — no @handle — Grok searches X to find the correct handles using thread context. Finally, GPT merges those found handles into the CSV and adds a Notes column for uncertain entries.
 
-**Airtable Integration**
+Each stage saves results to a named Airtable field — `[AUTO] Grok Normalization`, `[AUTO] GPT Normalization`, `[AUTO] Grok 2 (Handles)`, `[AUTO] GPT 2 (Normalized with Handles)` — so the team can audit every step.
 
-Now the system:
-- Parses Airtable record URLs
-- Fetches the "Thread URL" field automatically
-- Scrapes the thread
-- Uploads CSV as an attachment
-- Updates record status fields
-- Advances workflow stages
-
-**Architectural shift:**
-```
-Before: Scraper → CSV file → Manual upload
-After:  Airtable → Scraper → CSV → Back to Airtable (automated)
-```
-
-Zero manual steps. Users queue work in Airtable, results flow back automatically.
-
-**Grok (Xai) Validation**
-
-I integrated [Grok](https://x.ai) for AI-powered validation with 10 normalization rules:
-- Merge duplicates
-- Fix typos
-- Remove organizations (@news accounts, etc.)
-- Standardize handle formatting
-- Filter original poster's own comments
-
-Why Grok? It has real-time **X search tools**. The AI can search the platform to verify handles and context—something GPT can't do.
-
-This was the **10x moment**. The tool went from "somewhat useful scraper" to "intelligent data pipeline."
-
-### Day 3: The Multi-Stage Pipeline
-
-Later that same day, I realized one AI pass wasn't enough.
-
-**The insight:** Different AI models have different strengths.
-- **Grok:** Excellent at web-aware tasks (real-time X search, organization verification)
-- **GPT-5.2:** Better at structured reasoning (CSV formatting, edge cases, complex merging)
-
-I built a 4-step validation pipeline:
-
-**Step 1: Scrape** (existing)
-Raw CSV with all mentions.
-
-**Step 2a: Grok Normalization** (new)
-- Input: Raw CSV
-- AI task: Apply 10 validation rules
-- Tools: `web_search`, `x_search`
-- Output: JSON changelog
-- Saves to Airtable: `[AUTO] Grok Normalization`
-
-**Step 2b: GPT Enhancement** (new)
-- Input: Raw CSV + Grok's JSON
-- AI task: Apply same rules, output clean CSV
-- Output: Enhanced CSV extracted from GPT response
-- Saves to Airtable: `[AUTO] GPT Normalization`
-
-**Step 3a: Grok Handles Lookup** (new)
-Some nominees are mentioned by name only (no @handle). Grok searches X in real-time to find their handles.
-
-- Input: GPT CSV (rows with missing handles)
-- AI task: Search X for correct handles using thread context
-- Tools: `x_search` (real-time platform search)
-- Output: JSON mapping names → handles
-- Saves to Airtable: `[AUTO] Grok 2 (Handles)`
-
-**Step 3b: GPT Handles Normalization** (new)
-- Input: GPT CSV + Grok handles JSON
-- AI task: Insert found handles, add Notes column for uncertain ones
-- Output: Final sanitized CSV
-- Saves to Airtable: `[AUTO] GPT 2 (Normalized with Handles)`
-
-**Why multi-stage matters:**
-- **Separation of concerns:** Each stage has one job
-- **Auditability:** See what each AI changed and why
-- **Resume-ability:** Can restart from any step if something fails
-- **Model strengths:** Grok for search, GPT for structure
-
-I also enhanced the UI with step-by-step navigation, auto-population between stages, test data loading, and browser notifications when each step completes.
-
-### The Sophistication Layer
-
-By Day 3, I had added two more advanced features:
-
-**Algorithmic Normalization (`normalizeCsv.ts` - 1,065 lines)**
-
-Not everything needs AI. I built a sophisticated local normalizer with 10 rules:
-
-- **Rule 1:** Merge split rows (one row has @handle, another has name → unify)
-- **Rule 2:** Standardize names (choose best variant when same handle has multiple name spellings)
-- **Rule 6:** Fuzzy matching for typos using [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance)
-
-Example:
 ```typescript
-levenshtein("daniel scchmachtenberger", "Daniel Schmachtenberger")
-// Returns: 3 (character edit distance)
-// Rule 6 corrects it automatically
+// Grok: real-time validation with X search tools
+const grokResponse = await fetch('https://api.x.ai/v1/responses', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${xaiApiKey}` },
+  body: JSON.stringify({
+    model: 'grok-4-1-fast',
+    tools: [{ type: 'web_search' }, { type: 'x_search' }],
+    input: `${csvContent}\n\n${prompt}`,
+  }),
+});
+
+// GPT: structured reasoning pass
+const client = new OpenAI({ apiKey: openaiKey });
+const gptResponse = await client.responses.create({
+  model: 'gpt-5.2',
+  input: [{ role: 'user', content: promptText }],
+});
+const enhanced = gptResponse.output_text;
 ```
 
-- **Rule 7:** Filter organizations using keyword detection (`"news"`, `"policy"`, `"institute"`, etc.)
+The UI evolved alongside the pipeline: step-by-step navigation across all four stages, auto-population of each step's input from the previous step's output, test data loading for development, and browser notifications when each stage completes.
 
-**Output:** Transparent JSON audit trail:
+## The Normalization Engine
+
+Not everything needs AI. Alongside the multi-model pipeline, a local algorithmic normalizer handles the deterministic work — nine rules applied in sequence, no API calls required.
+
+The normalizer merges split rows where the same nomination appears with @handle in one row and a name in another. It standardizes name variants when the same handle has multiple spellings, choosing the highest-quality version by scoring capitalization, token count, and absence of numbers or URLs. It deduplicates by tweet context. It filters organizations using a keyword list — `news`, `policy`, `institute`, `foundation`, and twelve others. It removes the original poster from the nominee list. And it ensures every handle starts with @.
+
+For typo detection, the normalizer uses Levenshtein distance with a space-optimized two-array implementation rather than a full matrix. The `namesAreSimilar` function adds a first-letter guard — if two names start with different letters, it skips the expensive distance calculation entirely. Threshold: 2 edits for short names, 3 for names longer than 14 characters.
+
+Every change is logged in a transparent JSON audit trail:
 
 ```json
 {
   "summary": {
-    "original_rows": 42,
-    "final_rows": 38,
-    "removed_rows": 4,
-    "updated_rows": 15
+    "total_original_rows": 42,
+    "final_rows_count": 38,
+    "removed_rows_count": 4,
+    "updated_rows_count": 15
   },
-  "changes": [
-    {
-      "field": "nominee_name",
-      "old_value": "daniel scchmachtenberger",
-      "new_value": "Daniel Schmachtenberger",
-      "reason": "Corrected misspelling (3 char distance)",
-      "rule": 6
-    }
-  ]
-}
-```
-
-**Why transparency matters:** Users can verify AI decisions. Builds trust in automation.
-
-**Topic Enhancement (`topicEnhancer.ts` - 88 lines)**
-
-For extracting topic suggestions from threads (questions people ask in replies):
-
-- Raw topics have typos, fragments, unclear grammar
-- GPT-4o-mini batch processes (20 items/batch)
-- Preserves meaning while improving clarity
-
-Example enhancement:
-```
-Input:  "what r ur thoughts on decentralization in governance structures"
-Output: "What are your thoughts on decentralization in governance structures?"
-```
-
-Why GPT-4o-mini instead of GPT-5.2? **Cost optimization.** Simple rewording doesn't need the most powerful model. Batch processing 20 items at once saves API calls.
-
-## The Architecture
-
-Here's how it all fits together:
-
-```
-User in Airtable
-    ↓
-Paste Record URL → Fetch Thread URL
-    ↓
-Playwright Browser → X.com with Auth Cookies
-    ↓
-GraphQL Interception → Parse Tweets
-    ↓
-CSV Writer (dedupe, normalize)
-    ↓
-Step 2a: Grok Validation (web search, X search)
-    ↓
-Step 2b: GPT Enhancement (structured CSV)
-    ↓
-Step 3a: Grok Handle Lookup (real-time X search)
-    ↓
-Step 3b: GPT Handle Normalization (final CSV)
-    ↓
-Upload to Airtable + Update Status
-```
-
-**Key components:**
-
-**`scraper.ts`** - Browser automation
-- Playwright with stealth plugins
-- Human-like scrolling (1.5-3 sec delays)
-- Cursor-based pagination for large threads (up to 500 pages)
-- Smart stopping (8 scrolls with no new tweets = done)
-
-**`tweetParser.ts`** - GraphQL response parsing
-- Navigates nested structure: `data.threaded_conversation_with_injections_v2.instructions[].entries[]`
-- Extracts: tweet ID, URL, handle, text, timestamp, mentions
-- Creates one row per @mention
-
-**`validator.ts`** - Multi-model AI orchestration
-- Grok-4-1-fast with web/X search tools
-- GPT-5.2 for structured reasoning
-- GPT-4o-mini for batch topic enhancement
-
-**`airtable.ts`** - Integration layer
-- Parse record URLs → extract baseId/tableId/recordId
-- Fetch fields, update fields
-- Upload CSV attachments via tmpfiles.org temporary hosting
-
-**`server.ts`** - Express API
-- Job management (UUIDs, status tracking)
-- Server-sent events (SSE) for real-time log streaming
-- Endpoints for each pipeline step
-
-**`public/index.html`** - Web UI
-- Twitter-styled dark theme
-- Collapsible sections for each step
-- Auto-population between stages
-- Browser notifications on completion
-
-## Key Features
-
-**Zero Manual Steps**
-Queue work from Airtable → Results flow back automatically.
-
-**Multi-Model AI Validation**
-- Grok for real-time web/X search
-- GPT-5.2 for complex reasoning
-- GPT-4o-mini for batch processing
-- Each model for its strengths
-
-**Transparent Audit Trails**
-Every AI decision logged with:
-- What changed
-- Why it changed
-- Which rule applied
-- Old vs new values
-
-**Fuzzy Matching**
-Typo correction using Levenshtein distance (tolerates 2-3 character differences).
-
-**Organization Filtering**
-Automatically removes @news accounts, think tanks, policy orgs, etc.
-
-**Handle Verification**
-Real-time X search to find missing handles using thread context.
-
-**Resume-ability**
-Can restart from any step if something fails. Each stage saves results to Airtable.
-
-**Batch Optimization**
-Process 20 items/batch for topic enhancement to minimize API costs.
-
-## Lessons Learned
-
-### Start Simple, Iterate Based on Usage
-
-Day 1 MVP was enough to be useful. Each subsequent iteration added real value from user feedback. I avoided speculative features and built only what proved necessary through actual usage.
-
-### Integration Multiplies Value
-
-Standalone scraper: somewhat useful.
-
-Airtable-integrated scraper: **10x more useful** (zero manual steps).
-
-Build tools that fit existing workflows. Don't force users to learn new tools or switch contexts.
-
-### Multi-Model AI Strategy
-
-Don't assume one AI model for everything:
-- Grok: Real-time info needs (web search, X search)
-- GPT-5.2: Complex reasoning (normalization, merging)
-- GPT-4o-mini: Batch processing (topic enhancement)
-
-Each model has strengths. Use them strategically.
-
-### Transparency Builds Trust
-
-JSON audit trails for every AI change. Users can verify normalization decisions. Makes black-box AI explainable and debuggable.
-
-### Workflow Over Features
-
-Users don't want tools—they want solutions. Fit into existing workflows (Airtable in our case). Reduce context switching.
-
-### Real Data Tests Everything
-
-First real thread revealed parsing bugs immediately. User feedback drove column renaming. You can't predict issues in isolation.
-
-Ship fast, test with real data, iterate.
-
-### GraphQL > HTML Scraping
-
-HTML selectors break constantly. GraphQL schemas change less frequently. Intercept the same API the frontend uses.
-
-### Incremental Prompting with Claude
-
-I didn't ask Claude: "Build a complete X scraper with AI validation and Airtable integration."
-
-Instead:
-- "Build a basic X thread scraper using Playwright"
-- "Add CSV export with deduplication"
-- "Create a web UI with job management"
-- "Add Airtable integration for record fetching"
-- "Integrate Grok for validation"
-- "Add GPT for CSV enhancement"
-- "Add fuzzy matching for misspellings using Levenshtein distance"
-
-Small, focused prompts. Build incrementally. Test each piece.
-
-## The Impact
-
-**Development speed:**
-- 3 days from concept to production
-- ~1,500 lines of production code
-
-**User experience transformation:**
-```
-Before: 4-6 hours per thread (manual)
-After:  &lt;15 minutes (automated)
-```
-
-**Quality improvements:**
-- 90%+ duplicate reduction
-- Typo correction via fuzzy matching
-- Organization filtering
-- Handle verification via real-time search
-- Transparent audit trail
-
-**Cost efficiency:**
-- Railway hosting: ~$5/month
-- API costs: ~$2 per thread (3 AI models, multiple passes)
-- Time saved: 4+ hours per thread
-
-The tool has processed dozens of threads for dLogos, extracting thousands of nominations with >90% accuracy.
-
-## What's Next
-
-**Potential improvements:**
-
-- **Batch processing:** Queue multiple threads at once
-- **Smart caching:** Remember previously validated handles/names
-- **Confidence scores:** Quantify AI certainty for each normalization
-- **Export formats:** Support JSON, Google Sheets, Notion
-- **Scheduled runs:** Auto-scrape threads daily for ongoing discussions
-- **Community feedback:** Open-source parts of the pipeline for other projects
-
-I'm particularly interested in **confidence scoring**. Right now the AI either keeps or removes data. But what if it could say "80% confident this is the right handle"? That would enable human review of uncertain cases.
-
-## Code Snippets
-
-### GraphQL Interception Pattern
-
-```typescript
-async setupResponseInterceptor(page: Page, allTweets: Map<string, any>) {
-  page.on('response', async (response) => {
-    if (!response.url().includes('graphql')) return
-
-    try {
-      const json = await response.json()
-      const instructions = json?.data?.threaded_conversation_with_injections_v2?.instructions
-
-      if (!instructions) return
-
-      for (const instruction of instructions) {
-        for (const entry of instruction.entries || []) {
-          const tweet = entry.content?.itemContent?.tweet_results?.result
-          if (tweet && !allTweets.has(tweet.rest_id)) {
-            allTweets.set(tweet.rest_id, tweet)
-          }
-        }
-      }
-    } catch (e) {
-      // Ignore parse errors
-    }
-  })
-}
-```
-
-### Fuzzy Name Matching
-
-```typescript
-function levenshtein(a: string, b: string): number {
-  const matrix: number[][] = []
-
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i]
-  }
-
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j
-  }
-
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1]
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        )
-      }
-    }
-  }
-
-  return matrix[b.length][a.length]
-}
-
-function namesAreSimilar(name1: string, name2: string): boolean {
-  const n1 = name1.toLowerCase().trim()
-  const n2 = name2.toLowerCase().trim()
-
-  if (n1 === n2) return true
-
-  const distance = levenshtein(n1, n2)
-  const maxAllowedDistance = Math.min(n1.length, n2.length) > 10 ? 3 : 2
-
-  return distance <= maxAllowedDistance
-}
-```
-
-### Multi-Model Validation Flow
-
-```typescript
-// Step 2a: Grok normalization
-const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${XAI_API_KEY}` },
-  body: JSON.stringify({
-    model: 'grok-beta',
-    messages: [{
-      role: 'system',
-      content: 'You are validating CSV data with 10 normalization rules...'
-    }, {
-      role: 'user',
-      content: csvContent
-    }],
-    tools: [
-      { type: 'web_search' },
-      { type: 'x_search' }
-    ]
-  })
-})
-
-// Step 2b: GPT enhancement
-const gptResponse = await openai.chat.completions.create({
-  model: 'gpt-4o',
-  messages: [{
-    role: 'system',
-    content: 'Apply the following changes and output a clean CSV...'
-  }, {
-    role: 'user',
-    content: `Original CSV:\n${csvContent}\n\nChanges:\n${grokChanges}`
+  "changes": [{
+    "field": "nominee_name",
+    "old_value": "daniel scchmachtenberger",
+    "new_value": "Daniel Schmachtenberger",
+    "reason": "Corrected known misspelling",
+    "rule": 6
   }]
-})
-
-// Extract CSV from GPT response
-const csvMatch = gptResponse.choices[0].message.content.match(/```csv\n([\s\S]*?)\n```/)
-const enhancedCsv = csvMatch ? csvMatch[1] : gptResponse.choices[0].message.content
+}
 ```
 
-## Final Thoughts
+Users can verify every decision the system made. That transparency is what turns automation from a black box into something the team actually trusts.
 
-This project taught me that **the best tools emerge through iteration, not upfront design.**
+## Lessons
 
-I didn't set out to build a multi-stage AI validation pipeline. I set out to save our team 4-6 hours per thread.
+Integration matters more than features. The standalone scraper was useful enough — it saved time on data collection. But the Airtable integration changed the tool's category. It stopped being a utility the team had to remember to use and became part of the workflow they were already in. The lesson applies broadly: build into the systems people already use rather than asking them to adopt a new one.
 
-Each day revealed new insights:
-- Day 1: Ship something that works
-- Day 1 (evening): Real data finds bugs you never imagined
-- Day 2: Users care about clarity more than cleverness
-- Day 3: Integration is the 10x multiplier
-- Day 3: Different AI models for different tasks
-- Day 3: Transparency builds trust
+Different models for different jobs. Grok handles real-time search — verifying handles against live X data, checking whether an account is a person or an organization. GPT-5.2 handles structured reasoning — producing clean CSVs, merging conflicting data, resolving edge cases. GPT-4o-mini handles cheap batch work like topic title enhancement at 20 items per API call. The same principle applies to prompting: small focused requests, test each piece, build incrementally.
 
-If you're building AI-powered tools, consider:
-- Start simple, add sophistication incrementally
-- Fit into existing workflows, don't create new ones
-- Use multiple AI models for their specific strengths
-- Make AI decisions auditable and explainable
-- Test with real data from day one
+Transparency builds trust. Every normalization change is logged with what changed, why, which rule applied, and the old versus new values. Without this, the team would need to manually verify the AI's output — which defeats the purpose of automation. With it, they can spot-check the audit trail and trust the rest.
 
-And most importantly: **ship fast, iterate faster.**
+Real data is the only test. The first real X thread broke the parser in ways that never surfaced in development. User feedback drove the schema rename six hours after launch. The GraphQL interception strategy itself came from watching how X's frontend actually behaves, not from documentation. Ship fast, test against reality, fix what breaks.
 
----
+## Impact
 
-*Built with Claude Code and a lot of coffee.*
+Three days from concept to production, roughly 1,500 lines of code. Before: 4-6 hours per thread, manually scrolling, copying, deduplicating. After: under 15 minutes, automated end to end.
+
+Quality improved across the board — 90%+ duplicate reduction, typo correction via fuzzy matching, organization filtering, handle verification through real-time search, all with a transparent audit trail.
+
+Cost: about $5/month for Railway hosting and roughly $2 per thread across three AI model passes. Against 4+ hours of manual work per thread, the ROI was immediate. The tool has processed dozens of threads for dLogos, extracting thousands of nominations.
+
+Ship fast, iterate faster. *Built with Claude Code.*
