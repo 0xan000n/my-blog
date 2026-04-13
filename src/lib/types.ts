@@ -14,6 +14,7 @@ export interface ProjectFrontmatter {
   githubUrl?: string
   liveUrl?: string
   excerpt: string
+  image?: string
 }
 
 export interface BlogPost {
