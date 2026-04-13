@@ -8,7 +8,13 @@
       "WebFetch(domain:www.shadcn.io)",
       "WebSearch",
       "Bash(sips:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run dev:*)",
+      "Bash(osacompile:*)",
+      "Bash(osascript:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

@@ -1,0 +1,99 @@
+---
+title: "GhostHands: Invisible Hands for Your iOS Simulator"
+createdAt: "2026-04-09"
+techStack: ["Python", "Bash", "idb", "xcodebuild", "xcrun simctl", "PyObjC", "skills.sh"]
+excerpt: "An open source agent skill that gives AI coding agents the ability to build, run, see, and touch any iOS app in the simulator. No Xcode required, no mouse movement."
+image: "/ghosthands.jpg"
+githubUrl: "https://github.com/0xan000n/ghosthands"
+---
+
+![GhostHands](/ghosthands.jpg)
+
+## The Problem
+
+AI agents can write SwiftUI code. They can't see the result.
+
+I was editing a view with Claude. Changed some padding, swapped a color, moved a stack around. Claude made the edit, I rebuilt, checked the simulator, saw it was wrong, described what was wrong in text, Claude tried again, I rebuilt, checked again. 5 rounds before the spacing looked right.
+
+The whole time I kept thinking: why can't Claude just *look* at the screen?
+
+---
+
+## The Build
+
+The pieces were all there, scattered across 4 CLI tools. `xcodebuild` compiles from the terminal. `xcrun simctl` manages simulators. `simctl io screenshot` captures the screen. Claude is multimodal; it can read PNG files. I bolted them together into 8 scripts and packaged it as an [agent skill](https://skills.sh).
+
+The core loop: edit code, build, screenshot, agent sees the result, adjusts code, repeats.
+
+---
+
+## The Touch Problem
+
+Screenshots were the easy part. Touch was 3 failed attempts.
+
+**Attempt 1: AppleScript.** Told System Events to `click at {210, 531}` on the Simulator window. The click landed on the macOS window chrome but didn't punch through to the iOS content. A modal dialog sat there through 4 different coordinate calculations.
+
+**Attempt 2: CGEvent with private source.** Python, Quartz framework, `kCGEventSourceStatePrivate` (supposed to not move the visible cursor). The events punched through to the simulator. But `kCGEventSourceStatePrivate` is a lie. It still moves your mouse. Watching your cursor teleport across the screen while an AI agent works is unsettling.
+
+**Attempt 3: idb.** [Facebook's iOS Development Bridge](https://github.com/facebook/idb). Injects touch events directly into the simulator process via XPC. No cursor movement. No window focus required. Just: `idb ui tap 333 822`. Clean.
+
+---
+
+## Tap by Label
+
+The feature I'm most proud of, and it fell out of idb almost for free.
+
+`idb ui describe-all` dumps the simulator's full accessibility tree as JSON. Every button, every text field, every label, with its frame coordinates. So instead of guessing "the Settings button is probably at x=30%, y=50%," the agent runs:
+
+```bash
+python3 scripts/tap.py tap-label "Settings"
+```
+
+The script queries the accessibility tree, finds the element, calculates its center point, and taps it. If the label doesn't exist, it prints every available label so the agent can pick the right one.
+
+One catch: `describe-all` doesn't return tab bar items (they're `AXRadioButton` elements that only show up via `describe-point`). So the script falls back to a grid scan, probing coordinates across the top and bottom of the screen to find hidden elements.
+
+---
+
+## In Practice
+
+From my testing session, navigating tabs in a real app:
+
+```
+python3 scripts/tap.py tap-label Capture
+  Found: "Capture" (AXRadioButton) center=(194, 822)
+  Capture sheet opens with microphone recorder
+
+python3 scripts/tap.py tap-label Community
+  Found: "Community" (AXRadioButton) center=(333, 822)
+  Community feed shows with posts and reactions
+```
+
+Zero mouse movement. Sub-second response. The agent reads the screenshot and sees exactly what happened.
+
+---
+
+## Architecture
+
+No server, no daemon, no background process (beyond idb-companion which brew installs). 8 shell/Python scripts in a directory with a `SKILL.md` file.
+
+The dependency chain:
+
+- `xcodebuild` (ships with Xcode)
+- `xcrun simctl` (ships with Xcode)
+- `idb` (open source, `brew install idb-companion && pip3 install fb-idb`)
+- Python 3 (ships with macOS)
+
+Everything runs locally. Your code never leaves your machine.
+
+---
+
+## What's Next
+
+I'm curious what happens when you point this at a Figma mockup and tell the agent "make this screen look like this design." Screenshot comparison, pixel-level iteration, all running in a loop until the output matches.
+
+[github.com/0xan000n/ghosthands](https://github.com/0xan000n/ghosthands)
+
+```bash
+npx skills add 0xan000n/ghosthands
+```

@@ -19,6 +19,15 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: project.frontmatter.title,
     description: project.frontmatter.excerpt,
+    ...(project.frontmatter.image && {
+      openGraph: {
+        images: [{ url: project.frontmatter.image }],
+      },
+      twitter: {
+        card: 'summary_large_image',
+        images: [project.frontmatter.image],
+      },
+    }),
   }
 }
 
